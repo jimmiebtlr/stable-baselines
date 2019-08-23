@@ -16,6 +16,7 @@ from stable_baselines.a2c.utils import Scheduler, calc_entropy, mse, \
     total_episode_reward_logger
 from stable_baselines.acktr import kfac
 from stable_baselines.common.policies import ActorCriticPolicy, RecurrentActorCriticPolicy
+from stable_baselines.common.policies import create_dummy_action_mask, reshape_action_mask
 from stable_baselines.ppo2.ppo2 import safe_mean
 
 
@@ -205,7 +206,7 @@ class ACKTR(ActorCriticRLModel):
 
                 self.summary = tf.summary.merge_all()
 
-    def _train_step(self, obs, states, rewards, masks, actions, values, update, writer):
+    def _train_step(self, obs, states, rewards, masks, actions, values, update, writer, action_masks=None):
         """
         applies a training step to the model
 
@@ -227,10 +228,20 @@ class ACKTR(ActorCriticRLModel):
 
         td_map = {self.train_model.obs_ph: obs, self.action_ph: actions, self.advs_ph: advs, self.rewards_ph: rewards,
                   self.pg_lr_ph: cur_lr}
+
+        if len(action_masks) == 0:
+            action_masks = None
+        if action_masks is not None:
+            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space, self.n_steps * self.n_envs)
+
         if states is not None:
             td_map[self.train_model.states_ph] = states
             td_map[self.train_model.dones_ph] = masks
-
+            if action_masks is None:
+                action_masks = create_dummy_action_mask(self.train_model.ac_space, states.shape[0] * self.n_steps)
+        if action_masks is None:
+            action_masks = create_dummy_action_mask(self.train_model.ac_space, self.n_steps * self.n_envs)
+        td_map[self.train_model.action_mask_ph] = action_masks
         if writer is not None:
             # run loss backprop with summary, but once every 10 runs save the metadata (memory, compute time, ...)
             if self.full_tensorboard_log and (1 + update) % 10 == 0:
@@ -303,10 +314,11 @@ class ACKTR(ActorCriticRLModel):
             for update in range(1, total_timesteps // self.n_batch + 1):
                 # true_reward is the reward without discount
                 obs, states, rewards, masks, actions, values, ep_infos, true_reward = runner.run()
-                ep_info_buf.extend(ep_infos)
+                action_masks = ep_infos[0]
+                ep_info_buf.extend(ep_infos[1:])
                 policy_loss, value_loss, policy_entropy = self._train_step(obs, states, rewards, masks, actions, values,
                                                                            self.num_timesteps // (self.n_batch + 1),
-                                                                           writer)
+                                                                           writer, action_masks)
                 n_seconds = time.time() - t_start
                 fps = int((update * self.n_batch) / n_seconds)
 

@@ -6,11 +6,13 @@ from collections import deque
 import gym
 import numpy as np
 import tensorflow as tf
+from gym import spaces
 
 from stable_baselines import logger
 from stable_baselines.common import explained_variance, ActorCriticRLModel, tf_util, SetVerbosity, TensorboardWriter
 from stable_baselines.common.runners import AbstractEnvRunner
 from stable_baselines.common.policies import ActorCriticPolicy, RecurrentActorCriticPolicy
+from stable_baselines.common.policies import create_dummy_action_mask, reshape_action_mask
 from stable_baselines.a2c.utils import total_episode_reward_logger
 
 
@@ -124,8 +126,8 @@ class PPO2(ActorCriticRLModel):
                 n_batch_step = None
                 n_batch_train = None
                 if issubclass(self.policy, RecurrentActorCriticPolicy):
-                    assert self.n_envs % self.nminibatches == 0, "For recurrent policies, "\
-                        "the number of environments run in parallel should be a multiple of nminibatches."
+                    assert self.n_envs % self.nminibatches == 0, "For recurrent policies, " \
+                                                                 "the number of environments run in parallel should be a multiple of nminibatches."
                     n_batch_step = self.n_envs
                     n_batch_train = self.n_batch // self.nminibatches
 
@@ -172,9 +174,8 @@ class PPO2(ActorCriticRLModel):
                         # Clip the different between old and new value
                         # NOTE: this depends on the reward scaling
                         vpred_clipped = self.old_vpred_ph + \
-                            tf.clip_by_value(train_model.value_flat - self.old_vpred_ph,
-                                             - self.clip_range_vf_ph, self.clip_range_vf_ph)
-
+                                        tf.clip_by_value(train_model.value_flat - self.old_vpred_ph,
+                                                         - self.clip_range_vf_ph, self.clip_range_vf_ph)
 
                     vf_losses1 = tf.square(vpred - self.rewards_ph)
                     vf_losses2 = tf.square(vpred_clipped - self.rewards_ph)
@@ -245,7 +246,7 @@ class PPO2(ActorCriticRLModel):
                 self.summary = tf.summary.merge_all()
 
     def _train_step(self, learning_rate, cliprange, obs, returns, masks, actions, values, neglogpacs, update,
-                    writer, states=None, cliprange_vf=None):
+                    writer, states=None, cliprange_vf=None, action_masks=None):
         """
         Training of PPO2 Algorithm
 
@@ -270,10 +271,18 @@ class PPO2(ActorCriticRLModel):
                   self.advs_ph: advs, self.rewards_ph: returns,
                   self.learning_rate_ph: learning_rate, self.clip_range_ph: cliprange,
                   self.old_neglog_pac_ph: neglogpacs, self.old_vpred_ph: values}
+        if len(action_masks) == 0:
+            action_masks = None
+        if action_masks is not None:
+            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space, self.n_steps)
         if states is not None:
             td_map[self.train_model.states_ph] = states
             td_map[self.train_model.dones_ph] = masks
-
+            if action_masks is None:
+                action_masks = create_dummy_action_mask(self.train_model.ac_space, states.shape[0] * self.n_steps)
+        if action_masks is None:
+            action_masks = create_dummy_action_mask(self.train_model.ac_space, self.n_steps)
+        td_map[self.train_model.action_mask_ph] = action_masks
         if cliprange_vf is not None and cliprange_vf >= 0:
             td_map[self.clip_range_vf_ph] = cliprange_vf
 
@@ -333,7 +342,8 @@ class PPO2(ActorCriticRLModel):
                 # true_reward is the reward without discount
                 obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward = runner.run()
                 self.num_timesteps += self.n_batch
-                ep_info_buf.extend(ep_infos)
+                action_masks = ep_infos[0]
+                ep_info_buf.extend(ep_infos[1:])
                 mb_loss_vals = []
                 if states is None:  # nonrecurrent version
                     update_fac = self.n_batch // self.nminibatches // self.noptepochs + 1
@@ -347,7 +357,8 @@ class PPO2(ActorCriticRLModel):
                             mbinds = inds[start:end]
                             slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, writer=writer,
-                                                                 update=timestep, cliprange_vf=cliprange_vf_now))
+                                                                 update=timestep, cliprange_vf=cliprange_vf_now,
+                                                                 action_masks=action_masks))
                 else:  # recurrent version
                     update_fac = self.n_batch // self.nminibatches // self.noptepochs // self.n_steps + 1
                     assert self.n_envs % self.nminibatches == 0
@@ -366,7 +377,8 @@ class PPO2(ActorCriticRLModel):
                             mb_states = states[mb_env_inds]
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, update=timestep,
                                                                  writer=writer, states=mb_states,
-                                                                 cliprange_vf=cliprange_vf_now))
+                                                                 cliprange_vf=cliprange_vf_now,
+                                                                 action_masks=action_masks))
 
                 loss_vals = np.mean(mb_loss_vals, axis=0)
                 t_now = time.time()
@@ -460,9 +472,11 @@ class Runner(AbstractEnvRunner):
         # mb stands for minibatch
         mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [], [], [], [], [], []
         mb_states = self.states
-        ep_infos = []
+        ep_infos = [[]]
+        action_mask = None
         for _ in range(self.n_steps):
-            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
+            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones,
+                                                                       action_mask=action_mask)
             mb_obs.append(self.obs.copy())
             mb_actions.append(actions)
             mb_values.append(values)
@@ -474,9 +488,16 @@ class Runner(AbstractEnvRunner):
                 clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
             self.obs[:], rewards, self.dones, infos = self.env.step(clipped_actions)
             for info in infos:
-                maybe_ep_info = info.get('episode')
-                if maybe_ep_info is not None:
-                    ep_infos.append(maybe_ep_info)
+                if info.get('episode') is not None:
+                    ep_infos.append(info.get('episode'))
+                # Did the env tell us what actions are valid?
+                if info.get('valid_actions') is not None:
+                    action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.bool), axis=0)
+                    ep_infos[0].append(action_mask)
+                else:
+                    # otherwise, assume all actions are valid
+                    self.model.action_mask = None
+
             mb_rewards.append(rewards)
         # batch of steps to batch of rollouts
         mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
@@ -503,7 +524,6 @@ class Runner(AbstractEnvRunner):
 
         mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, true_reward = \
             map(swap_and_flatten, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, true_reward))
-
         return mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, mb_states, ep_infos, true_reward
 
 

@@ -590,7 +590,7 @@ class ActorCriticRLModel(BaseRLModel):
 
         return clipped_actions, states
 
-    def action_probability(self, observation, state=None, mask=None, actions=None, logp=False):
+    def action_probability(self, observation, action_mask=None, state=None, mask=None, actions=None, logp=False):
         if state is None:
             state = self.initial_state
         if mask is None:
@@ -599,7 +599,7 @@ class ActorCriticRLModel(BaseRLModel):
         vectorized_env = self._is_vectorized_observation(observation, self.observation_space)
 
         observation = observation.reshape((-1,) + self.observation_space.shape)
-        actions_proba = self.proba_step(observation, state, mask)
+        actions_proba = self.proba_step(observation, state, mask, action_mask)
 
         if len(actions_proba) == 0:  # empty list means not implemented
             warnings.warn("Warning: action probability is not implemented for {} action space. Returning None."

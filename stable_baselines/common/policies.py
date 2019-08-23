@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import tensorflow as tf
-from gym.spaces import Discrete
+from gym import spaces
 
 from stable_baselines.a2c.utils import conv, linear, conv_to_fc, batch_to_seq, seq_to_batch, lstm
 from stable_baselines.common.distributions import make_proba_dist_type, CategoricalProbabilityDistribution, \
@@ -111,17 +111,24 @@ class BasePolicy(ABC):
                  obs_phs=None, add_action_ph=False):
         self.n_env = n_env
         self.n_steps = n_steps
-        self.n_batch = n_batch
         with tf.variable_scope("input", reuse=False):
             if obs_phs is None:
                 self._obs_ph, self._processed_obs = observation_input(ob_space, n_batch, scale=scale)
             else:
                 self._obs_ph, self._processed_obs = obs_phs
-
             self._action_ph = None
             if add_action_ph:
                 self._action_ph = tf.placeholder(dtype=ac_space.dtype, shape=(n_batch,) + ac_space.shape,
                                                  name="action_ph")
+            if isinstance(ac_space, spaces.MultiDiscrete):
+                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, ac_space.nvec[0],
+                                                                               ac_space.nvec[1]), name="action_mask_ph")
+            elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
+                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, ac_space.n),
+                                                      name="action_mask_ph")
+            elif isinstance(ac_space, spaces.Box):
+                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, ac_space.shape[0]),
+                                                      name="action_mask_ph")
         self.sess = sess
         self.reuse = reuse
         self.ob_space = ob_space
@@ -130,7 +137,7 @@ class BasePolicy(ABC):
     @property
     def is_discrete(self):
         """bool: is action space discrete."""
-        return isinstance(self.ac_space, Discrete)
+        return isinstance(self.ac_space, spaces.Discrete)
 
     @property
     def initial_state(self):
@@ -159,6 +166,11 @@ class BasePolicy(ABC):
         """tf.Tensor: placeholder for actions, shape (self.n_batch, ) + self.ac_space.shape."""
         return self._action_ph
 
+    @property
+    def action_mask_ph(self):
+        """tf.Tensor: placeholder for valid actions, shape (self.n_batch, self.ac_space.n)"""
+        return self._action_mask_ph
+
     @staticmethod
     def _kwargs_check(feature_extraction, kwargs):
         """
@@ -178,25 +190,27 @@ class BasePolicy(ABC):
             raise ValueError("Unknown keywords for policy: {}".format(kwargs))
 
     @abstractmethod
-    def step(self, obs, state=None, mask=None):
+    def step(self, obs, state=None, mask=None, action_mask=None):
         """
         Returns the policy for a single step
 
         :param obs: ([float] or [int]) The current observation of the environment
         :param state: ([float]) The last states (used in recurrent policies)
         :param mask: ([float]) The last masks (used in recurrent policies)
+        :param action_mask: ([bool]) A vector of boolean values denoting what actions are valid
         :return: ([float], [float], [float], [float]) actions, values, states, neglogp
         """
         raise NotImplementedError
 
     @abstractmethod
-    def proba_step(self, obs, state=None, mask=None):
+    def proba_step(self, obs, state=None, mask=None, action_mask=None):
         """
         Returns the action probability for a single step
 
         :param obs: ([float] or [int]) The current observation of the environment
         :param state: ([float]) The last states (used in recurrent policies)
         :param mask: ([float]) The last masks (used in recurrent policies)
+        :param action_mask: ([bool]) A binary vector for denoting which actions are valid
         :return: ([float]) the action probability
         """
         raise NotImplementedError
@@ -243,7 +257,7 @@ class ActorCriticPolicy(BasePolicy):
                 self._policy_proba = tf.nn.sigmoid(self.policy)
             elif isinstance(self.proba_distribution, MultiCategoricalProbabilityDistribution):
                 self._policy_proba = [tf.nn.softmax(categorical.flatparam())
-                                     for categorical in self.proba_distribution.categoricals]
+                                      for categorical in self.proba_distribution.categoricals]
             else:
                 self._policy_proba = []  # it will return nothing, as it is not implemented
             self._value_flat = self.value_fn[:, 0]
@@ -294,7 +308,7 @@ class ActorCriticPolicy(BasePolicy):
         return self._policy_proba
 
     @abstractmethod
-    def step(self, obs, state=None, mask=None, deterministic=False):
+    def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
         """
         Returns the policy for a single step
 
@@ -302,6 +316,7 @@ class ActorCriticPolicy(BasePolicy):
         :param state: ([float]) The last states (used in recurrent policies)
         :param mask: ([float]) The last masks (used in recurrent policies)
         :param deterministic: (bool) Whether or not to return deterministic actions.
+        :param action_mask: ([bool]) A vector of boolean values showing what actions are valid
         :return: ([float], [float], [float], [float]) actions, values, states, neglogp
         """
         raise NotImplementedError
@@ -344,11 +359,11 @@ class RecurrentActorCriticPolicy(ActorCriticPolicy):
                                                          n_batch, reuse=reuse, scale=scale)
 
         with tf.variable_scope("input", reuse=False):
-            self._dones_ph = tf.placeholder(tf.float32, (n_batch, ), name="dones_ph")  # (done t-1)
-            state_ph_shape = (self.n_env, ) + tuple(state_shape)
+            self._dones_ph = tf.placeholder(tf.float32, (n_batch,), name="dones_ph")  # (done t-1)
+            state_ph_shape = (self.n_env,) + tuple(state_shape)
             self._states_ph = tf.placeholder(tf.float32, state_ph_shape, name="states_ph")
 
-        initial_state_shape = (self.n_env, ) + tuple(state_shape)
+        initial_state_shape = (self.n_env,) + tuple(state_shape)
         self._initial_state = np.zeros(initial_state_shape, dtype=np.float32)
 
     @property
@@ -365,7 +380,7 @@ class RecurrentActorCriticPolicy(ActorCriticPolicy):
     def states_ph(self):
         """tf.Tensor: placeholder for states, shape (self.n_env, ) + state_shape."""
         return self._states_ph
-    
+
     @abstractmethod
     def value(self, obs, state=None, mask=None):
         """
@@ -403,7 +418,7 @@ class LstmPolicy(RecurrentActorCriticPolicy):
                  **kwargs):
         # state_shape = [n_lstm * 2] dim because of the cell and hidden states of the LSTM
         super(LstmPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch,
-                                         state_shape=(2 * n_lstm, ), reuse=reuse,
+                                         state_shape=(2 * n_lstm,), reuse=reuse,
                                          scale=(feature_extraction == "cnn"))
 
         self._kwargs_check(feature_extraction, kwargs)
@@ -430,7 +445,7 @@ class LstmPolicy(RecurrentActorCriticPolicy):
                 value_fn = linear(rnn_output, 'vf', 1)
 
                 self._proba_distribution, self._policy, self.q_value = \
-                    self.pdtype.proba_distribution_from_latent(rnn_output, rnn_output)
+                    self.pdtype.proba_distribution_from_latent(rnn_output, rnn_output, self.action_mask_ph)
 
             self._value_fn = value_fn
         else:  # Use the new net_arch parameter
@@ -500,16 +515,27 @@ class LstmPolicy(RecurrentActorCriticPolicy):
                     self.pdtype.proba_distribution_from_latent(latent_policy, latent_value)
         self._setup_init()
 
-    def step(self, obs, state=None, mask=None, deterministic=False):
+    def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
+        if action_mask is not None:
+            action_mask = reshape_action_mask(len(state), self.ac_space, action_mask)
+        else:
+            action_mask = create_dummy_action_mask(self.ac_space, len(state))
         if deterministic:
             return self.sess.run([self.deterministic_action, self.value_flat, self.snew, self.neglogp],
-                                 {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask})
+                                 {self.obs_ph: obs, self.states_ph: state, self.action_mask_ph: action_mask,
+                                  self.dones_ph: mask})
         else:
             return self.sess.run([self.action, self.value_flat, self.snew, self.neglogp],
-                                 {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask})
+                                 {self.obs_ph: obs, self.states_ph: state, self.action_mask_ph: action_mask,
+                                  self.dones_ph: mask})
 
-    def proba_step(self, obs, state=None, mask=None):
-        return self.sess.run(self.policy_proba, {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask})
+    def proba_step(self, obs, state=None, mask=None, action_mask=None):
+        if action_mask is not None:
+            action_mask = reshape_action_mask(self.n_steps, self.ac_space, len(state))
+        else:
+            action_mask = create_dummy_action_mask(self.ac_space, len(state))
+        return self.sess.run(self.policy_proba, {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask,
+                                                 self.action_mask_ph: action_mask})
 
     def value(self, obs, state=None, mask=None):
         return self.sess.run(self.value_flat, {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask})
@@ -564,21 +590,30 @@ class FeedForwardPolicy(ActorCriticPolicy):
             self._value_fn = linear(vf_latent, 'vf', 1)
 
             self._proba_distribution, self._policy, self.q_value = \
-                self.pdtype.proba_distribution_from_latent(pi_latent, vf_latent, init_scale=0.01)
+                self.pdtype.proba_distribution_from_latent(pi_latent, vf_latent, action_mask_vector=self.action_mask_ph,
+                                                           init_scale=0.01)
 
         self._setup_init()
 
-    def step(self, obs, state=None, mask=None, deterministic=False):
+    def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
+        if action_mask is not None:
+            action_mask = reshape_action_mask(self.n_steps, self.ac_space, action_mask)
+        else:
+            action_mask = create_dummy_action_mask(self.ac_space, self.n_steps)
         if deterministic:
             action, value, neglogp = self.sess.run([self.deterministic_action, self.value_flat, self.neglogp],
-                                                   {self.obs_ph: obs})
+                                                   {self.obs_ph: obs, self.action_mask_ph: action_mask})
         else:
             action, value, neglogp = self.sess.run([self.action, self.value_flat, self.neglogp],
-                                                   {self.obs_ph: obs})
+                                                   {self.obs_ph: obs, self.action_mask_ph: action_mask})
         return action, value, self.initial_state, neglogp
 
-    def proba_step(self, obs, state=None, mask=None):
-        return self.sess.run(self.policy_proba, {self.obs_ph: obs})
+    def proba_step(self, obs, state=None, mask=None, action_mask=None):
+        if action_mask is not None:
+            action_mask = reshape_action_mask(self.n_steps, self.ac_space, action_mask)
+        else:
+            action_mask = create_dummy_action_mask(self.ac_space, self.n_steps)
+        return self.sess.run(self.policy_proba, {self.obs_ph: obs, self.action_mask_ph: action_mask})
 
     def value(self, obs, state=None, mask=None):
         return self.sess.run(self.value_flat, {self.obs_ph: obs})
@@ -751,3 +786,23 @@ def register_policy(name, policy):
         raise ValueError("Error: the name {} is alreay registered for a different policy, will not override."
                          .format(name))
     _policy_registry[sub_class][name] = policy
+
+
+def create_dummy_action_mask(ac_space, num_samples):
+    if isinstance(ac_space, spaces.MultiDiscrete):
+        action_mask = np.ones((num_samples, ac_space.nvec[0], ac_space.nvec[1]), dtype=np.float32)
+    elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
+        action_mask = np.ones((num_samples, ac_space.n), dtype=np.float32)
+    else:
+        action_mask = np.ones((num_samples, ac_space.shape[0]), dtype=np.float32)
+    return action_mask
+
+
+def reshape_action_mask(action_mask, ac_space, num_samples):
+    if isinstance(ac_space, spaces.MultiDiscrete):
+        action_mask = np.reshape(action_mask, (num_samples, ac_space.nvec[0], ac_space.nvec[1]), dtype=np.float32)
+    elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
+        action_mask = np.reshape(action_mask, (num_samples, ac_space.n), dtype=np.float32)
+    elif isinstance(ac_space, spaces.Box):
+        action_mask = np.reshape(action_mask, (num_samples, ac_space.shape[0]), dtype=np.float32)
+    return action_mask

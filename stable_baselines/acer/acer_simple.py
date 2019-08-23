@@ -11,6 +11,7 @@ from stable_baselines.acer.buffer import Buffer
 from stable_baselines.common import ActorCriticRLModel, tf_util, SetVerbosity, TensorboardWriter
 from stable_baselines.common.runners import AbstractEnvRunner
 from stable_baselines.common.policies import ActorCriticPolicy, RecurrentActorCriticPolicy
+from stable_baselines.common.policies import create_dummy_action_mask, reshape_action_mask
 
 
 def strip(var, n_envs, n_steps, flat=False):
@@ -415,7 +416,7 @@ class ACER(ActorCriticRLModel):
 
                 self.summary = tf.summary.merge_all()
 
-    def _train_step(self, obs, actions, rewards, dones, mus, states, masks, steps, writer=None):
+    def _train_step(self, obs, actions, rewards, dones, mus, states, masks, steps, writer=None, action_masks=None):
         """
         applies a training step to the model
 
@@ -434,11 +435,19 @@ class ACER(ActorCriticRLModel):
         td_map = {self.train_model.obs_ph: obs, self.polyak_model.obs_ph: obs, self.action_ph: actions,
                   self.reward_ph: rewards, self.done_ph: dones, self.mu_ph: mus, self.learning_rate_ph: cur_lr}
 
+        num_steps = self.train_model.action_mask_ph.shape[0]
+        if len(action_masks) == 0:
+            action_masks = create_dummy_action_mask(self.train_model.ac_space, num_steps)
+        else:
+            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space, num_steps)
+
         if states is not None:
             td_map[self.train_model.states_ph] = states
             td_map[self.train_model.dones_ph] = masks
             td_map[self.polyak_model.states_ph] = states
             td_map[self.polyak_model.dones_ph] = masks
+        td_map[self.train_model.action_mask_ph] = action_masks
+        td_map[self.polyak_model.action_mask_ph] = action_masks
 
         if writer is not None:
             # run loss backprop with summary, but once every 10 runs save the metadata (memory, compute time, ...)
@@ -482,7 +491,7 @@ class ACER(ActorCriticRLModel):
 
             # n_batch samples, 1 on_policy call and multiple off-policy calls
             for steps in range(0, total_timesteps, self.n_batch):
-                enc_obs, obs, actions, rewards, mus, dones, masks = runner.run()
+                enc_obs, obs, actions, rewards, mus, dones, masks, infos = runner.run()
                 episode_stats.feed(rewards, dones)
 
                 if buffer is not None:
@@ -503,7 +512,7 @@ class ACER(ActorCriticRLModel):
                 masks = masks.reshape([runner.batch_ob_shape[0]])
 
                 names_ops, values_ops = self._train_step(obs, actions, rewards, dones, mus, self.initial_state, masks,
-                                                         self.num_timesteps, writer)
+                                                         self.num_timesteps, writer, action_masks=infos)
 
                 if callback is not None:
                     # Only stop training if return value is False, not when it is None. This is for backwards
@@ -623,9 +632,11 @@ class _Runner(AbstractEnvRunner):
         """
         enc_obs = [self.obs]
         mb_obs, mb_actions, mb_mus, mb_dones, mb_rewards = [], [], [], [], []
+        ep_infos = []
+        action_mask = None
         for _ in range(self.n_steps):
-            actions, _, states, _ = self.model.step(self.obs, self.states, self.dones)
-            mus = self.model.proba_step(self.obs, self.states, self.dones)
+            actions, _, states, _ = self.model.step(self.obs, self.states, self.dones, action_mask=action_mask)
+            mus = self.model.proba_step(self.obs, self.states, self.dones, action_mask=action_mask)
             mb_obs.append(np.copy(self.obs))
             mb_actions.append(actions)
             mb_mus.append(mus)
@@ -634,7 +645,15 @@ class _Runner(AbstractEnvRunner):
             # Clip the actions to avoid out of bound error
             if isinstance(self.env.action_space, Box):
                 clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
-            obs, rewards, dones, _ = self.env.step(clipped_actions)
+            obs, rewards, dones, infos = self.env.step(clipped_actions)
+            for info in infos:
+                # Did the env tell us what actions are valid?
+                if info.get('valid_actions') is not None:
+                    action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.bool), axis=0)
+                    ep_infos.append(action_mask)
+                else:
+                    # otherwise, assume all actions are valid
+                    action_mask = None
             # states information for statefull models like LSTM
             self.states = states
             self.dones = dones
@@ -657,4 +676,4 @@ class _Runner(AbstractEnvRunner):
         # shapes are now [nenv, nsteps, []]
         # When pulling from buffer, arrays will now be reshaped in place, preventing a deep copy.
 
-        return enc_obs, mb_obs, mb_actions, mb_rewards, mb_mus, mb_dones, mb_masks
+        return enc_obs, mb_obs, mb_actions, mb_rewards, mb_mus, mb_dones, mb_masks, ep_infos

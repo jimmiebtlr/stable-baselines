@@ -158,6 +158,11 @@ def linear(input_tensor, scope, n_hidden, *, init_scale=1.0, init_bias=0.0):
         return tf.matmul(input_tensor, weight) + bias
 
 
+def action_mask(input_tensor, mask_tensor, scope):
+    with tf.variable_scope(scope):
+        return tf.multiply(input_tensor, mask_tensor, name="masking")
+
+
 def batch_to_seq(tensor_batch, n_batch, n_steps, flat=False):
     """
     Transform a batch of Tensors, into a sequence of Tensors for recurrent policies
