@@ -491,7 +491,7 @@ class ACER(ActorCriticRLModel):
 
             # n_batch samples, 1 on_policy call and multiple off-policy calls
             for steps in range(0, total_timesteps, self.n_batch):
-                enc_obs, obs, actions, rewards, mus, dones, masks, infos = runner.run()
+                enc_obs, obs, actions, rewards, mus, dones, masks, action_masks, infos = runner.run()
                 episode_stats.feed(rewards, dones)
 
                 if buffer is not None:
@@ -512,7 +512,7 @@ class ACER(ActorCriticRLModel):
                 masks = masks.reshape([runner.batch_ob_shape[0]])
 
                 names_ops, values_ops = self._train_step(obs, actions, rewards, dones, mus, self.initial_state, masks,
-                                                         self.num_timesteps, writer, action_masks=infos)
+                                                         self.num_timesteps, writer, action_masks=action_masks)
 
                 if callback is not None:
                     # Only stop training if return value is False, not when it is None. This is for backwards
@@ -627,11 +627,11 @@ class _Runner(AbstractEnvRunner):
         """
         Run a step leaning of the model
 
-        :return: ([float], [float], [float], [float], [float], [bool], [float])
-                 encoded observation, observations, actions, rewards, mus, dones, masks
+        :return: ([float], [float], [float], [float], [float], [bool], [float], [bool])
+                 encoded observation, observations, actions, rewards, mus, dones, masks, action masks
         """
         enc_obs = [self.obs]
-        mb_obs, mb_actions, mb_mus, mb_dones, mb_rewards = [], [], [], [], []
+        mb_obs, mb_actions, mb_mus, mb_dones, mb_rewards, mb_action_masks = [], [], [], [], [], []
         ep_infos = []
         action_mask = None
         for _ in range(self.n_steps):
@@ -650,7 +650,7 @@ class _Runner(AbstractEnvRunner):
                 # Did the env tell us what actions are valid?
                 if info.get('valid_actions') is not None:
                     action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.bool), axis=0)
-                    ep_infos.append(action_mask)
+                    mb_action_masks.append(action_mask)
                 else:
                     # otherwise, assume all actions are valid
                     action_mask = None
@@ -676,4 +676,4 @@ class _Runner(AbstractEnvRunner):
         # shapes are now [nenv, nsteps, []]
         # When pulling from buffer, arrays will now be reshaped in place, preventing a deep copy.
 
-        return enc_obs, mb_obs, mb_actions, mb_rewards, mb_mus, mb_dones, mb_masks, ep_infos
+        return enc_obs, mb_obs, mb_actions, mb_rewards, mb_mus, mb_dones, mb_masks, mb_action_masks, ep_infos

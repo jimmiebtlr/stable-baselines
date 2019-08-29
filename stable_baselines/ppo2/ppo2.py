@@ -340,10 +340,10 @@ class PPO2(ActorCriticRLModel):
                 cliprange_now = self.cliprange(frac)
                 cliprange_vf_now = cliprange_vf(frac)
                 # true_reward is the reward without discount
-                obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward = runner.run()
+                obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward, action_masks \
+                    = runner.run()
                 self.num_timesteps += self.n_batch
-                action_masks = ep_infos[0]
-                ep_info_buf.extend(ep_infos[1:])
+                ep_info_buf.extend(ep_infos)
                 mb_loss_vals = []
                 if states is None:  # nonrecurrent version
                     update_fac = self.n_batch // self.nminibatches // self.noptepochs + 1
@@ -468,11 +468,12 @@ class Runner(AbstractEnvRunner):
             - negative log probabilities: (np.ndarray)
             - states: (np.ndarray) the internal states of the recurrent policies
             - infos: (dict) the extra information of the model
+            - action masks: (np.ndarray) Valid action vectors
         """
         # mb stands for minibatch
-        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [], [], [], [], [], []
+        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs, mb_action_masks = [], [], [], [], [], [], []
         mb_states = self.states
-        ep_infos = [[]]
+        ep_infos = []
         action_mask = None
         for _ in range(self.n_steps):
             actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones,
@@ -493,7 +494,7 @@ class Runner(AbstractEnvRunner):
                 # Did the env tell us what actions are valid?
                 if info.get('valid_actions') is not None:
                     action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.bool), axis=0)
-                    ep_infos[0].append(action_mask)
+                    mb_action_masks.append(action_mask)
                 else:
                     # otherwise, assume all actions are valid
                     self.model.action_mask = None
@@ -524,7 +525,8 @@ class Runner(AbstractEnvRunner):
 
         mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, true_reward = \
             map(swap_and_flatten, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, true_reward))
-        return mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, mb_states, ep_infos, true_reward
+        return mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, mb_states, ep_infos, true_reward, \
+               mb_action_masks
 
 
 def get_schedule_fn(value_schedule):

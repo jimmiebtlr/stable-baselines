@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.ops import math_ops
 from gym import spaces
 
-from stable_baselines.a2c.utils import linear, action_mask
+from stable_baselines.a2c.utils import linear, apply_action_mask
 
 
 class ProbabilityDistribution(object):
@@ -167,8 +167,8 @@ class CategoricalProbabilityDistributionType(ProbabilityDistributionType):
 
     def proba_distribution_from_latent(self, pi_latent_vector, vf_latent_vector, action_mask_vector=None,
                                        init_scale=1.0, init_bias=0.0):
-        pdparam = action_mask(linear(pi_latent_vector, 'pi', self.n_cat, init_scale=init_scale, init_bias=init_bias),
-                              action_mask_vector, 'action_mask')
+        pdparam = apply_action_mask(linear(pi_latent_vector, 'pi', self.n_cat, init_scale=init_scale, init_bias=init_bias),
+                                    action_mask_vector, 'action_mask')
         q_values = linear(vf_latent_vector, 'q', self.n_cat, init_scale=init_scale, init_bias=init_bias)
         return self.proba_distribution_from_flat(pdparam), pdparam, q_values
 
@@ -301,8 +301,6 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
     def neglogp(self, x):
         # Note: we can't use sparse_softmax_cross_entropy_with_logits because
         #       the implementation does not allow second-order derivatives...
-        tf.print(x)
-        tf.print(self.logits)
         one_hot_actions = tf.one_hot(x, self.logits.get_shape().as_list()[-1])
         return tf.nn.softmax_cross_entropy_with_logits_v2(
             logits=self.logits,

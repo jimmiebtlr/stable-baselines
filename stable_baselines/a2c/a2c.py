@@ -183,6 +183,7 @@ class A2C(ActorCriticRLModel):
         :param values: ([float]) The logits values
         :param update: (int) the current step iteration
         :param writer: (TensorFlow Summary.writer) the writer for tensorboard
+        :param: action_masks: ([bool]) The boolean vectors denoting which actions are valid
         :return: (float, float, float) policy loss, value loss, policy entropy
         """
         advs = rewards - values
@@ -245,9 +246,8 @@ class A2C(ActorCriticRLModel):
             t_start = time.time()
             for update in range(1, total_timesteps // self.n_batch + 1):
                 # true_reward is the reward without discount
-                obs, states, rewards, masks, actions, values, ep_infos, true_reward = runner.run()
-                action_masks = ep_infos[0]
-                ep_info_buf.extend(ep_infos[1:])
+                obs, states, rewards, masks, actions, values, action_masks, ep_infos, true_reward = runner.run()
+                ep_info_buf.extend(ep_infos)
                 _, value_loss, policy_entropy = self._train_step(obs, states, rewards, masks,
                                                                  actions, values, self.num_timesteps // self.n_batch,
                                                                  writer, action_masks)
@@ -325,12 +325,12 @@ class A2CRunner(AbstractEnvRunner):
         """
         Run a learning step of the model
 
-        :return: ([float], [float], [float], [bool], [float], [float])
-                 observations, states, rewards, masks, actions, values
+        :return: ([float], [float], [float], [bool], [float], [float], [bool])
+                 observations, states, rewards, masks, actions, values, action masks
         """
-        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones = [], [], [], [], []
+        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_action_masks = [], [], [], [], [], []
         mb_states = self.states
-        ep_infos = [[]]
+        ep_infos = []
         action_mask = None
         for _ in range(self.n_steps):
             actions, values, states, _ = self.model.step(self.obs, self.states, self.dones, action_mask=action_mask)
@@ -350,7 +350,7 @@ class A2CRunner(AbstractEnvRunner):
                 if info.get('valid_actions') is not None:
                     action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.bool),
                                                             axis=0)
-                    ep_infos[0].append(self.model.action_mask)
+                    mb_action_masks.append(self.model.action_mask)
 
             self.states = states
             self.dones = dones
@@ -383,4 +383,4 @@ class A2CRunner(AbstractEnvRunner):
         mb_values = mb_values.reshape(-1, *mb_values.shape[2:])
         mb_masks = mb_masks.reshape(-1, *mb_masks.shape[2:])
         true_rewards = true_rewards.reshape(-1, *true_rewards.shape[2:])
-        return mb_obs, mb_states, mb_rewards, mb_masks, mb_actions, mb_values, ep_infos, true_rewards
+        return mb_obs, mb_states, mb_rewards, mb_masks, mb_actions, mb_values, mb_action_masks, ep_infos, true_rewards

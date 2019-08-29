@@ -158,7 +158,15 @@ def linear(input_tensor, scope, n_hidden, *, init_scale=1.0, init_bias=0.0):
         return tf.matmul(input_tensor, weight) + bias
 
 
-def action_mask(input_tensor, mask_tensor, scope):
+def apply_action_mask(input_tensor, mask_tensor, scope):
+    """
+    Perform element wise multiplication to mask invalid actions
+
+    :param input_tensor: (TensorFlow Tensor) The output layer of a policy
+    :param mask_tensor: (TensorFlow Tensor) A boolean tensor denoting which actions are valid
+    :param scope: (str) The TensorFlow variable scope
+    :return: (TensorFlow Tensor) The resulting tensor from element-wise multiplication between the two tensors
+    """
     with tf.variable_scope(scope):
         return tf.multiply(input_tensor, mask_tensor, name="masking")
 
