@@ -313,9 +313,8 @@ class ACKTR(ActorCriticRLModel):
 
             for update in range(1, total_timesteps // self.n_batch + 1):
                 # true_reward is the reward without discount
-                obs, states, rewards, masks, actions, values, ep_infos, true_reward = runner.run()
-                action_masks = ep_infos[0]
-                ep_info_buf.extend(ep_infos[1:])
+                obs, states, rewards, masks, actions, values, action_masks, ep_infos, true_reward = runner.run()
+                ep_info_buf.extend(ep_infos)
                 policy_loss, value_loss, policy_entropy = self._train_step(obs, states, rewards, masks, actions, values,
                                                                            self.num_timesteps // (self.n_batch + 1),
                                                                            writer, action_masks)

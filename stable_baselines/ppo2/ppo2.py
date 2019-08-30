@@ -274,14 +274,15 @@ class PPO2(ActorCriticRLModel):
         if len(action_masks) == 0:
             action_masks = None
         if action_masks is not None:
-            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space, self.n_steps)
+            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space,
+                                               int(self.n_steps / self.nminibatches))
         if states is not None:
             td_map[self.train_model.states_ph] = states
             td_map[self.train_model.dones_ph] = masks
             if action_masks is None:
                 action_masks = create_dummy_action_mask(self.train_model.ac_space, states.shape[0] * self.n_steps)
         if action_masks is None:
-            action_masks = create_dummy_action_mask(self.train_model.ac_space, self.n_steps)
+            action_masks = create_dummy_action_mask(self.train_model.ac_space, int(self.n_steps / self.nminibatches))
         td_map[self.train_model.action_mask_ph] = action_masks
         if cliprange_vf is not None and cliprange_vf >= 0:
             td_map[self.clip_range_vf_ph] = cliprange_vf

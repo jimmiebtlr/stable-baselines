@@ -547,7 +547,7 @@ class ACER(ActorCriticRLModel):
                         masks = masks.reshape([runner.batch_ob_shape[0]])
 
                         self._train_step(obs, actions, rewards, dones, mus, self.initial_state, masks,
-                                         self.num_timesteps)
+                                         self.num_timesteps, action_masks=action_masks)
 
                 self.num_timesteps += self.n_batch
 
