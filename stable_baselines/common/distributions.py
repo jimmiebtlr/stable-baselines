@@ -350,17 +350,12 @@ class MultiCategoricalProbabilityDistribution(ProbabilityDistribution):
         """
         self.flat = flat
         self.categoricals = list(map(CategoricalProbabilityDistribution, tf.split(flat, nvec, axis=-1)))
-        self.action_mask_vector = action_mask_vector
 
     def flatparam(self):
         return self.flat
 
     def mode(self):
-        modes = []
-        for idx, p in enumerate(self.categoricals):
-            p.logits = tf.multiply(p.logits, self.action_mask_vector[:, idx])
-            modes.append(p.mode())
-        return tf.cast(tf.stack(modes, axis=-1), tf.int32)
+        return tf.cast(tf.stack([p.mode() for p in self.categoricals], axis=-1), tf.int32)
 
     def neglogp(self, x):
         return tf.add_n([p.neglogp(px) for p, px in zip(self.categoricals, tf.unstack(x, axis=-1))])
@@ -372,11 +367,7 @@ class MultiCategoricalProbabilityDistribution(ProbabilityDistribution):
         return tf.add_n([p.entropy() for p in self.categoricals])
 
     def sample(self):
-        samples = []
-        for idx, p in enumerate(self.categoricals):
-            p.logits = tf.multiply(p.logits, self.action_mask_vector[:, idx])
-            samples.append(p.mode())
-        return tf.cast(tf.stack(samples, axis=-1), tf.int32)
+        return tf.cast(tf.stack([p.sample() for p in self.categoricals], axis=-1), tf.int32)
 
     @classmethod
     def fromflat(cls, flat):

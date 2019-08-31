@@ -512,7 +512,8 @@ class LstmPolicy(RecurrentActorCriticPolicy):
                 self._value_fn = linear(latent_value, 'vf', 1)
                 # TODO: why not init_scale = 0.001 here like in the feedforward
                 self._proba_distribution, self._policy, self.q_value = \
-                    self.pdtype.proba_distribution_from_latent(latent_policy, latent_value)
+                    self.pdtype.proba_distribution_from_latent(latent_policy, latent_value,
+                                                               action_mask_vector=self.action_mask_ph)
         self._setup_init()
 
     def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
