@@ -350,7 +350,7 @@ class A2CRunner(AbstractEnvRunner):
                 if info.get('valid_actions') is not None:
                     action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.bool),
                                                             axis=0)
-                    mb_action_masks.append(self.model.action_mask)
+                    mb_action_masks.append(action_mask)
 
             self.states = states
             self.dones = dones
