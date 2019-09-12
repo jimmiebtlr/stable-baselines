@@ -165,10 +165,11 @@ def apply_action_mask(input_tensor, mask_tensor, scope):
     :param input_tensor: (TensorFlow Tensor) The output layer of a policy
     :param mask_tensor: (TensorFlow Tensor) A boolean tensor denoting which actions are valid
     :param scope: (str) The TensorFlow variable scope
-    :return: (TensorFlow Tensor) The resulting tensor from element-wise multiplication between the two tensors
+    :return: (TensorFlow Tensor) The resulting tensor from element-wise multiplication between the input_tensor and
+    mask_tensor
     """
     with tf.variable_scope(scope):
-        return tf.multiply(input_tensor, mask_tensor, name="masking")
+        return tf.add(input_tensor, mask_tensor, name="masking")
 
 
 def batch_to_seq(tensor_batch, n_batch, n_steps, flat=False):

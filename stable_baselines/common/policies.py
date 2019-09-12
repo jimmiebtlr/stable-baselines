@@ -121,8 +121,8 @@ class BasePolicy(ABC):
                 self._action_ph = tf.placeholder(dtype=ac_space.dtype, shape=(n_batch,) + ac_space.shape,
                                                  name="action_ph")
             if isinstance(ac_space, spaces.MultiDiscrete):
-                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, ac_space.nvec[0],
-                                                                               ac_space.nvec[1]), name="action_mask_ph")
+                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch) + ac_space.nvec,
+                                                      name="action_mask_ph")
             elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
                 self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, ac_space.n),
                                                       name="action_mask_ph")
@@ -250,7 +250,7 @@ class ActorCriticPolicy(BasePolicy):
             self._deterministic_action = self.proba_distribution.mode()
             self._neglogp = self.proba_distribution.neglogp(self.action)
             if isinstance(self.proba_distribution, CategoricalProbabilityDistribution):
-                self._policy_proba = tf.nn.softmax(self.policy)
+                self._policy_proba = tf.nn.relu(self.policy)
             elif isinstance(self.proba_distribution, DiagGaussianProbabilityDistribution):
                 self._policy_proba = [self.proba_distribution.mean, self.proba_distribution.std]
             elif isinstance(self.proba_distribution, BernoulliProbabilityDistribution):
@@ -791,7 +791,7 @@ def register_policy(name, policy):
 
 def create_dummy_action_mask(ac_space, num_samples):
     if isinstance(ac_space, spaces.MultiDiscrete):
-        action_mask = np.ones((num_samples, ac_space.nvec[0], ac_space.nvec[1]), dtype=np.float32)
+        action_mask = np.ones((num_samples, ac_space.nvec), dtype=np.float32)
     elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
         action_mask = np.ones((num_samples, ac_space.n), dtype=np.float32)
     else:
@@ -801,9 +801,11 @@ def create_dummy_action_mask(ac_space, num_samples):
 
 def reshape_action_mask(action_mask, ac_space, num_samples):
     if isinstance(ac_space, spaces.MultiDiscrete):
-        action_mask = np.reshape(action_mask, (num_samples, ac_space.nvec[0], ac_space.nvec[1]))
+        action_mask = np.reshape(action_mask, (num_samples, ac_space.nvec))
     elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
         action_mask = np.reshape(action_mask, (num_samples, ac_space.n))
     elif isinstance(ac_space, spaces.Box):
         action_mask = np.reshape(action_mask, (num_samples, ac_space.shape[0]))
+    action_mask[action_mask == 0] = -np.inf
+    action_mask[action_mask == 1] = 0
     return action_mask

@@ -494,7 +494,7 @@ class Runner(AbstractEnvRunner):
                     ep_infos.append(info.get('episode'))
                 # Did the env tell us what actions are valid?
                 if info.get('valid_actions') is not None:
-                    action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.bool), axis=0)
+                    action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.float32), axis=0)
                     mb_action_masks.append(action_mask)
                 else:
                     # otherwise, assume all actions are valid
