@@ -121,7 +121,7 @@ class BasePolicy(ABC):
                 self._action_ph = tf.placeholder(dtype=ac_space.dtype, shape=(n_batch,) + ac_space.shape,
                                                  name="action_ph")
             if isinstance(ac_space, spaces.MultiDiscrete):
-                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch) + ac_space.nvec,
+                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=[n_batch].extend(ac_space.nvec),
                                                       name="action_mask_ph")
             elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
                 self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, ac_space.n),
@@ -791,7 +791,7 @@ def register_policy(name, policy):
 
 def create_dummy_action_mask(ac_space, num_samples):
     if isinstance(ac_space, spaces.MultiDiscrete):
-        action_mask = np.ones((num_samples, ac_space.nvec), dtype=np.float32)
+        action_mask = np.ones([num_samples].extend(ac_space.nvec), dtype=np.float32)
     elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
         action_mask = np.ones((num_samples, ac_space.n), dtype=np.float32)
     else:
@@ -801,7 +801,7 @@ def create_dummy_action_mask(ac_space, num_samples):
 
 def reshape_action_mask(action_mask, ac_space, num_samples):
     if isinstance(ac_space, spaces.MultiDiscrete):
-        action_mask = np.reshape(action_mask, (num_samples, ac_space.nvec))
+        action_mask = np.reshape(action_mask, [num_samples].extend(ac_space.nvec))
     elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
         action_mask = np.reshape(action_mask, (num_samples, ac_space.n))
     elif isinstance(ac_space, spaces.Box):
