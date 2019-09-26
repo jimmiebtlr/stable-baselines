@@ -464,7 +464,6 @@ class Runner(AbstractEnvRunner):
         for _ in range(self.n_steps):
             actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
             mb_obs.append(self.obs.copy())
-            mb_actions.append(actions)
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)
             mb_dones.append(self.dones)
@@ -473,10 +472,27 @@ class Runner(AbstractEnvRunner):
             if isinstance(self.env.action_space, gym.spaces.Box):
                 clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
             self.obs[:], rewards, self.dones, infos = self.env.step(clipped_actions)
-            for info in infos:
-                maybe_ep_info = info.get('episode')
+
+            correct_actions = []
+            for index in range(len(infos)):
+                maybe_ep_info = infos[index].get('episode')
                 if maybe_ep_info is not None:
                     ep_infos.append(maybe_ep_info)
+
+                # 將決策網絡決定的操作替換為環境認為正確的操作
+                current_actions = infos[index].get('current_actions')
+                if current_actions is not None:
+                    if np.shape(actions[index]) == np.shape(current_actions):
+                        current_actions = np.array(current_actions)
+                        correct_actions.append(current_actions)
+                    else:
+                        correct_actions.append(actions[index])
+                else:
+                    correct_actions.append(actions[index])
+
+            correct_actions = np.array(correct_actions)
+            mb_actions.append(correct_actions)
+
             mb_rewards.append(rewards)
         # batch of steps to batch of rollouts
         mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
