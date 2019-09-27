@@ -209,6 +209,11 @@ class DQN(OffPolicyRLModel):
                 env_action = action
                 reset = False
                 new_obs, rew, done, info = self.env.step(env_action)
+                # 將決策網絡決定的操作替換為環境認為正確的操作
+                current_actions = info.get('current_action')
+                if current_actions is not None:
+                    if np.shape(action) == np.shape(current_actions):
+                        action = current_actions
                 # Store transition in the replay buffer.
                 self.replay_buffer.add(obs, action, rew, new_obs, float(done))
                 obs = new_obs
