@@ -11,6 +11,7 @@ from stable_baselines.common.distributions import make_proba_dist_type, Categori
     MultiCategoricalProbabilityDistribution, DiagGaussianProbabilityDistribution, BernoulliProbabilityDistribution
 from stable_baselines.common.input import observation_input
 
+masked_action_penalty=-100
 
 def nature_cnn(scaled_images, **kwargs):
     """
@@ -806,6 +807,6 @@ def reshape_action_mask(action_mask, ac_space, num_samples):
         action_mask = np.reshape(action_mask, (num_samples, ac_space.n))
     elif isinstance(ac_space, spaces.Box):
         action_mask = np.reshape(action_mask, (num_samples, ac_space.shape[0]))
-    action_mask[action_mask == 0] = -np.inf
+    action_mask[action_mask == 0] = masked_action_penalty
     action_mask[action_mask == 1] = 0
     return action_mask
