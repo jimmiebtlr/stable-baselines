@@ -800,6 +800,8 @@ def create_dummy_action_mask(ac_space, num_samples):
 
 
 def reshape_action_mask(action_mask, ac_space, num_samples):
+    action_mask = np.copy(action_mask)
+
     if isinstance(ac_space, spaces.MultiDiscrete):
         action_mask = np.reshape(action_mask, [num_samples].extend(ac_space.nvec))
     elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
