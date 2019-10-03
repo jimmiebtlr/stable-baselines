@@ -464,10 +464,6 @@ class Runner(AbstractEnvRunner):
         action_masks = []
         for _ in range(self.n_steps):
             actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones, action_mask=action_masks)
-            print('actions: ', actions)
-            print('values: ', values)
-            print('states', self.states)
-            print('neglogpacs', neglogpacs)
             mb_obs.append(self.obs.copy())
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)

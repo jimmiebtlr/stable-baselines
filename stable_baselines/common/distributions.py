@@ -294,15 +294,15 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
         # mask: 0 is valid action, -inf is invalid action
         # [1, 2, 3] add [0, -inf, 0] = [1, -inf, 3]
         if np.shape(self.action_mask) == np.shape(self.logits):
-            self.logits = tf.add(self.logits, self.action_mask)
+            logits = tf.add(self.logits, self.action_mask)
+        else:
+            logits = self.logits
         return tf.argmax(self.logits, axis=-1)
 
     def neglogp(self, x):
         # Note: we can't use sparse_softmax_cross_entropy_with_logits because
         #       the implementation does not allow second-order derivatives...
-        x = tf.Print(x, [x], 'neglogp x: ', summarize = 100)
         one_hot_actions = tf.one_hot(x, self.logits.get_shape().as_list()[-1])
-        one_hot_actions = tf.Print(one_hot_actions, [one_hot_actions], 'neglogp one_hot_actions: ', summarize = 100)
         return tf.nn.softmax_cross_entropy_with_logits_v2(
             logits=self.logits,
             labels=tf.stop_gradient(one_hot_actions))
@@ -327,16 +327,13 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
     def sample(self):
         # Gumbel-max trick to sample
         # a categorical distribution (see http://amid.fish/humble-gumbel)
-        self.logits = tf.Print(self.logits, [self.logits], 'sample logits: ', summarize = 100)
         uniform = tf.random_uniform(tf.shape(self.logits), dtype=self.logits.dtype)
         probability = self.logits - tf.log(-tf.log(uniform))
 
         # mask: 0 is valid action, -inf is invalid action
         # [1, 2, 3] add [0, -inf, 0] = [1, -inf, 3]
         if np.shape(self.action_mask) == np.shape(probability):
-            # self.action_mask = tf.Print(self.action_mask, [self.action_mask], 'sample mask: ', summarize = 100)
             probability = tf.add(probability, self.action_mask)
-            # probability = tf.Print(probability, [probability], 'sample probability: ', summarize = 100)
         return tf.argmax(probability, axis=-1)
 
     @classmethod
