@@ -593,7 +593,10 @@ class FeedForwardPolicy(ActorCriticPolicy):
         self._setup_init()
 
     def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
-        if action_mask is None:
+        if action_mask is not None:
+            action_mask[action_mask == 0] = -999
+            action_mask[action_mask == 1] = 0
+        else:
             action_mask = create_dummy_action_mask(self.ac_space, self.n_steps)
         if deterministic:
             action, value, neglogp = self.sess.run([self.deterministic_action, self.value_flat, self.neglogp],
@@ -783,9 +786,9 @@ def register_policy(name, policy):
 
 def create_dummy_action_mask(ac_space, num_samples):
     if isinstance(ac_space, spaces.MultiDiscrete):
-        action_mask = np.ones((num_samples, ) + ac_space.nvec.shape, dtype=np.bool)
+        action_mask = np.zeros((num_samples, ) + ac_space.nvec.shape, dtype=np.bool)
     elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
-        action_mask = np.ones((num_samples, ac_space.n), dtype=np.bool)
+        action_mask = np.zeros((num_samples, ac_space.n), dtype=np.bool)
     else:
-        action_mask = np.ones((num_samples, ac_space.shape[0]), dtype=np.bool)
+        action_mask = np.zeros((num_samples, ac_space.shape[0]), dtype=np.bool)
     return action_mask

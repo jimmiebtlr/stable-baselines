@@ -649,7 +649,7 @@ class _Runner(AbstractEnvRunner):
             for info in infos:
                 # Did the env tell us what actions are valid?
                 if info.get('valid_actions') is not None:
-                    action_mask = np.array(info.get('valid_actions'), dtype=np.bool)
+                    action_mask = np.array(info.get('valid_actions'), dtype=np.float)
                     mb_action_masks.append(action_mask)
                     action_mask = np.expand_dims(action_mask, axis=0)
                 else:

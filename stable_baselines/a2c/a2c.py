@@ -347,7 +347,7 @@ class A2CRunner(AbstractEnvRunner):
                 if maybe_ep_info is not None:
                     ep_infos.append(maybe_ep_info)
                 if info.get('valid_actions') is not None:
-                    self.action_mask = np.array(info.get('valid_actions'), dtype=np.bool)
+                    self.action_mask = np.array(info.get('valid_actions'), dtype=np.float)
                     mb_action_masks.append(self.action_mask)
                     self.action_mask = np.expand_dims(self.action_mask, axis=0)
             self.states = states
