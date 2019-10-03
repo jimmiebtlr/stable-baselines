@@ -169,7 +169,7 @@ def apply_action_mask(input_tensor, mask_tensor, scope):
     mask_tensor
     """
     with tf.variable_scope(scope):
-        return tf.add(input_tensor, mask_tensor, name="masking")
+        return tf.multiply(tf.nn.sigmoid(input_tensor, name="mask_relu"), mask_tensor, name="masking")
 
 
 def batch_to_seq(tensor_batch, n_batch, n_steps, flat=False):

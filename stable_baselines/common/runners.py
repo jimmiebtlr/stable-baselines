@@ -20,6 +20,7 @@ class AbstractEnvRunner(ABC):
         self.n_steps = n_steps
         self.states = model.initial_state
         self.dones = [False for _ in range(n_env)]
+        self.action_mask = None
 
     @abstractmethod
     def run(self):

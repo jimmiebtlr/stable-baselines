@@ -517,9 +517,7 @@ class LstmPolicy(RecurrentActorCriticPolicy):
         self._setup_init()
 
     def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
-        if action_mask is not None:
-            action_mask = reshape_action_mask(action_mask, self.ac_space, len(state))
-        else:
+        if action_mask is None:
             action_mask = create_dummy_action_mask(self.ac_space, len(state))
         if deterministic:
             return self.sess.run([self.deterministic_action, self.value_flat, self.snew, self.neglogp],
@@ -531,9 +529,7 @@ class LstmPolicy(RecurrentActorCriticPolicy):
                                   self.dones_ph: mask})
 
     def proba_step(self, obs, state=None, mask=None, action_mask=None):
-        if action_mask is not None:
-            action_mask = reshape_action_mask(action_mask, self.ac_space, len(state))
-        else:
+        if action_mask is None:
             action_mask = create_dummy_action_mask(self.ac_space, len(state))
         return self.sess.run(self.policy_proba, {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask,
                                                  self.action_mask_ph: action_mask})
@@ -597,9 +593,7 @@ class FeedForwardPolicy(ActorCriticPolicy):
         self._setup_init()
 
     def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
-        if action_mask is not None:
-            action_mask = reshape_action_mask(action_mask, self.ac_space, self.n_steps)
-        else:
+        if action_mask is None:
             action_mask = create_dummy_action_mask(self.ac_space, self.n_steps)
         if deterministic:
             action, value, neglogp = self.sess.run([self.deterministic_action, self.value_flat, self.neglogp],
@@ -610,9 +604,7 @@ class FeedForwardPolicy(ActorCriticPolicy):
         return action, value, self.initial_state, neglogp
 
     def proba_step(self, obs, state=None, mask=None, action_mask=None):
-        if action_mask is not None:
-            action_mask = reshape_action_mask(action_mask, self.ac_space, self.n_steps)
-        else:
+        if action_mask is None:
             action_mask = create_dummy_action_mask(self.ac_space, self.n_steps)
         return self.sess.run(self.policy_proba, {self.obs_ph: obs, self.action_mask_ph: action_mask})
 
@@ -791,21 +783,9 @@ def register_policy(name, policy):
 
 def create_dummy_action_mask(ac_space, num_samples):
     if isinstance(ac_space, spaces.MultiDiscrete):
-        action_mask = np.ones([num_samples].extend(ac_space.nvec), dtype=np.float32)
+        action_mask = np.ones((num_samples, ) + ac_space.nvec.shape, dtype=np.bool)
     elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
-        action_mask = np.ones((num_samples, ac_space.n), dtype=np.float32)
+        action_mask = np.ones((num_samples, ac_space.n), dtype=np.bool)
     else:
-        action_mask = np.ones((num_samples, ac_space.shape[0]), dtype=np.float32)
-    return action_mask
-
-
-def reshape_action_mask(action_mask, ac_space, num_samples):
-    if isinstance(ac_space, spaces.MultiDiscrete):
-        action_mask = np.reshape(action_mask, [num_samples].extend(ac_space.nvec))
-    elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):
-        action_mask = np.reshape(action_mask, (num_samples, ac_space.n))
-    elif isinstance(ac_space, spaces.Box):
-        action_mask = np.reshape(action_mask, (num_samples, ac_space.shape[0]))
-    action_mask[action_mask == 0] = -np.inf
-    action_mask[action_mask == 1] = 0
+        action_mask = np.ones((num_samples, ac_space.shape[0]), dtype=np.bool)
     return action_mask

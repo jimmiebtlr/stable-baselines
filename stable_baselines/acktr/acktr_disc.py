@@ -16,7 +16,7 @@ from stable_baselines.a2c.utils import Scheduler, calc_entropy, mse, \
     total_episode_reward_logger
 from stable_baselines.acktr import kfac
 from stable_baselines.common.policies import ActorCriticPolicy, RecurrentActorCriticPolicy
-from stable_baselines.common.policies import create_dummy_action_mask, reshape_action_mask
+from stable_baselines.common.policies import create_dummy_action_mask
 from stable_baselines.ppo2.ppo2 import safe_mean
 
 
@@ -231,8 +231,6 @@ class ACKTR(ActorCriticRLModel):
 
         if len(action_masks) == 0:
             action_masks = None
-        if action_masks is not None:
-            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space, self.n_steps * self.n_envs)
 
         if states is not None:
             td_map[self.train_model.states_ph] = states

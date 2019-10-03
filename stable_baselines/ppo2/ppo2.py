@@ -12,7 +12,7 @@ from stable_baselines import logger
 from stable_baselines.common import explained_variance, ActorCriticRLModel, tf_util, SetVerbosity, TensorboardWriter
 from stable_baselines.common.runners import AbstractEnvRunner
 from stable_baselines.common.policies import ActorCriticPolicy, RecurrentActorCriticPolicy
-from stable_baselines.common.policies import create_dummy_action_mask, reshape_action_mask
+from stable_baselines.common.policies import create_dummy_action_mask
 from stable_baselines.a2c.utils import total_episode_reward_logger
 
 
@@ -255,7 +255,7 @@ class PPO2(ActorCriticRLModel):
         :param obs: (np.ndarray) The current observation of the environment
         :param returns: (np.ndarray) the rewards
         :param masks: (np.ndarray) The last masks for done episodes (used in recurent policies)
-        :param actions: (np.ndarray) the actions
+        :param actionexpans: (np.ndarray) the actions
         :param values: (np.ndarray) the values
         :param neglogpacs: (np.ndarray) Negative Log-likelihood probability of Actions
         :param update: (int) the current step iteration
@@ -273,9 +273,10 @@ class PPO2(ActorCriticRLModel):
                   self.old_neglog_pac_ph: neglogpacs, self.old_vpred_ph: values}
         if len(action_masks) == 0:
             action_masks = None
+
         if action_masks is not None:
-            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space,
-                                               self.n_batch // self.nminibatches)
+            action_masks = np.reshape(action_masks, (self.n_batch // self.nminibatches, self.train_model.ac_space.n))
+
         if states is not None:
             td_map[self.train_model.states_ph] = states
             td_map[self.train_model.dones_ph] = masks
@@ -359,7 +360,7 @@ class PPO2(ActorCriticRLModel):
                             slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, writer=writer,
                                                                  update=timestep, cliprange_vf=cliprange_vf_now,
-                                                                 action_masks=action_masks))
+                                                                 action_masks=action_masks[start:end]))
                 else:  # recurrent version
                     update_fac = self.n_batch // self.nminibatches // self.noptepochs // self.n_steps + 1
                     assert self.n_envs % self.nminibatches == 0
@@ -379,7 +380,7 @@ class PPO2(ActorCriticRLModel):
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, update=timestep,
                                                                  writer=writer, states=mb_states,
                                                                  cliprange_vf=cliprange_vf_now,
-                                                                 action_masks=action_masks))
+                                                                 action_masks=action_masks[start:end]))
 
                 loss_vals = np.mean(mb_loss_vals, axis=0)
                 t_now = time.time()
@@ -494,8 +495,9 @@ class Runner(AbstractEnvRunner):
                     ep_infos.append(info.get('episode'))
                 # Did the env tell us what actions are valid?
                 if info.get('valid_actions') is not None:
-                    action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.float32), axis=0)
+                    action_mask = np.array(info.get('valid_actions'), dtype=np.bool)
                     mb_action_masks.append(action_mask)
+                    action_mask = np.expand_dims(action_mask, axis=0)
                 else:
                     # otherwise, assume all actions are valid
                     self.model.action_mask = None
