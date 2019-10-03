@@ -461,8 +461,13 @@ class Runner(AbstractEnvRunner):
         mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [], [], [], [], [], []
         mb_states = self.states
         ep_infos = []
+        action_masks = []
         for _ in range(self.n_steps):
-            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
+            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones, action_mask=action_masks)
+            print('actions: ', actions)
+            print('values: ', values)
+            print('states', self.states)
+            print('neglogpacs', neglogpacs)
             mb_obs.append(self.obs.copy())
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)
@@ -472,8 +477,8 @@ class Runner(AbstractEnvRunner):
             if isinstance(self.env.action_space, gym.spaces.Box):
                 clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
             self.obs[:], rewards, self.dones, infos = self.env.step(clipped_actions)
-
             current_actions = []
+            action_masks.clear()
             for index in range(len(infos)):
                 maybe_ep_info = infos[index].get('episode')
                 if maybe_ep_info is not None:
@@ -481,14 +486,15 @@ class Runner(AbstractEnvRunner):
 
                 # 將決策網絡決定的操作替換為環境認為正確的操作
                 env_current_actions = infos[index].get('current_actions')
-                if env_current_actions is not None:
-                    if np.shape(actions[index]) == np.shape(env_current_actions):
-                        env_current_actions = np.array(env_current_actions)
-                        current_actions.append(env_current_actions)
-                    else:
-                        current_actions.append(actions[index])
+                if  np.shape(env_current_actions) == np.shape(actions[index]):
+                    env_current_actions = np.array(env_current_actions)
+                    current_actions.append(env_current_actions)
                 else:
                     current_actions.append(actions[index])
+
+                env_action_mask = infos[index].get('action_mask')
+                if env_action_mask is not None:
+                    action_masks.append(np.concatenate(env_action_mask))
 
             current_actions = np.array(current_actions)
             mb_actions.append(current_actions)
