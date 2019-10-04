@@ -442,6 +442,7 @@ class Runner(AbstractEnvRunner):
         super().__init__(env=env, model=model, n_steps=n_steps)
         self.lam = lam
         self.gamma = gamma
+        self.action_masks = []
 
     def run(self):
         """
@@ -461,9 +462,8 @@ class Runner(AbstractEnvRunner):
         mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [], [], [], [], [], []
         mb_states = self.states
         ep_infos = []
-        action_masks = []
         for _ in range(self.n_steps):
-            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones, action_mask=action_masks)
+            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones, action_mask=self.action_masks)
             mb_obs.append(self.obs.copy())
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)
@@ -474,7 +474,7 @@ class Runner(AbstractEnvRunner):
                 clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
             self.obs[:], rewards, self.dones, infos = self.env.step(clipped_actions)
             current_actions = []
-            action_masks.clear()
+            self.action_masks.clear()
             for index in range(len(infos)):
                 maybe_ep_info = infos[index].get('episode')
                 if maybe_ep_info is not None:
@@ -488,9 +488,12 @@ class Runner(AbstractEnvRunner):
                 else:
                     current_actions.append(actions[index])
 
+                # actoin mask
                 env_action_mask = infos[index].get('action_mask')
                 if env_action_mask is not None:
-                    action_masks.append(np.concatenate(env_action_mask))
+                    self.action_masks.append(np.concatenate(env_action_mask))
+                else:
+                    self.action_masks.append(np.ones(sum(self.env.action_space.nvec)))
 
             current_actions = np.array(current_actions)
             mb_actions.append(current_actions)
