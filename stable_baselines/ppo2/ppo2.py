@@ -490,9 +490,9 @@ class Runner(AbstractEnvRunner):
 
                 # actoin mask
                 env_action_mask = infos[index].get('action_mask')
-                if env_action_mask is not None:
+                if isinstance(self.env.action_space, gym.spaces.MultiDiscrete) and env_action_mask is not None:
                     self.action_masks.append(np.concatenate(env_action_mask))
-                else:
+                elif isinstance(self.env.action_space, gym.spaces.MultiDiscrete) and env_action_mask is None:
                     self.action_masks.append(np.ones(sum(self.env.action_space.nvec)))
 
             current_actions = np.array(current_actions)

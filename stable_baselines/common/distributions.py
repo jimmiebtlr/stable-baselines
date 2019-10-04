@@ -293,11 +293,9 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
     def mode(self):
         # mask: 0 is valid action, -inf is invalid action
         # [1, 2, 3] add [0, -inf, 0] = [1, -inf, 3]
-        if np.shape(self.action_mask) == np.shape(self.logits):
-            logits = tf.add(self.logits, self.action_mask)
-        else:
-            logits = self.logits
-        return tf.argmax(self.logits, axis=-1)
+        logits = self.logits
+        logits = tf.add(logits, self.action_mask)
+        return tf.argmax(logits, axis=-1)
 
     def neglogp(self, x):
         # Note: we can't use sparse_softmax_cross_entropy_with_logits because
@@ -332,8 +330,7 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
 
         # mask: 0 is valid action, -inf is invalid action
         # [1, 2, 3] add [0, -inf, 0] = [1, -inf, 3]
-        if np.shape(self.action_mask) == np.shape(probability):
-            probability = tf.add(probability, self.action_mask)
+        probability = tf.add(probability, self.action_mask)
         return tf.argmax(probability, axis=-1)
 
     @classmethod
