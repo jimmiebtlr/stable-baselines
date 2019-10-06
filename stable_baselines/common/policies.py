@@ -785,8 +785,6 @@ def register_policy(name, policy):
 
 
 def create_dummy_action_mask(ac_space, num_samples):
-    ac_space = np.copy(ac_space)
-
     if isinstance(ac_space, spaces.MultiDiscrete):
         action_mask = np.zeros((num_samples, ) + ac_space.nvec.shape, dtype=np.bool)
     elif isinstance(ac_space, spaces.Discrete) or isinstance(ac_space, spaces.MultiBinary):

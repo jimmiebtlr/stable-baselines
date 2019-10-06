@@ -498,7 +498,6 @@ class Runner(AbstractEnvRunner):
                 # Did the env tell us what actions are valid?
                 if info.get('valid_actions') is not None:
                     action_mask.append(np.array(info.get('valid_actions'), dtype=np.float))
-                    action_mask = np.expand_dims(action_mask, axis=0)
                 else:
                     # otherwise, assume all actions are valid
                     self.model.action_mask = None
