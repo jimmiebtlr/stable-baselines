@@ -503,7 +503,7 @@ class Runner(AbstractEnvRunner):
                 elif isinstance(self.env.action_space, gym.spaces.Discrete) and env_action_mask is not None:
                     self.action_masks.append(env_action_mask)
                 elif isinstance(self.env.action_space, gym.spaces.Discrete):
-                    self.action_masks.append(np.ones(sum(self.env.action_space.n)))
+                    self.action_masks.append(np.ones(self.env.action_space.n))
 
             current_actions = np.array(current_actions)
             mb_actions.append(current_actions)
