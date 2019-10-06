@@ -594,7 +594,7 @@ class FeedForwardPolicy(ActorCriticPolicy):
 
     def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
         if action_mask is not None:
-            action_mask[action_mask == 0] = -999
+            action_mask[action_mask == 0] = -99999
             action_mask[action_mask == 1] = 0
         else:
             action_mask = create_dummy_action_mask(self.ac_space, self.n_steps)

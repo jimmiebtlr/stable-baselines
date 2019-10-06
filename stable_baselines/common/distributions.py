@@ -328,7 +328,7 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
     def sample(self):
         # Gumbel-max trick to sample
         # a categorical distribution (see http://amid.fish/humble-gumbel)
-        # uniform = tf.random_uniform(tf.shape(self.logits), dtype=self.logits.dtype)
+        uniform = tf.random_uniform(tf.shape(self.logits), dtype=self.logits.dtype)
         return tf.argmax(self.logits, axis=-1)
         # return tf.argmax(self.logits - tf.log(-tf.log(uniform)), axis=-1)
 
