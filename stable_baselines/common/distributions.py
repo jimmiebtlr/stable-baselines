@@ -93,7 +93,7 @@ class ProbabilityDistributionType(object):
         :param flat: ([float]) the flat probabilities
         :return: (ProbabilityDistribution) the instance of the ProbabilityDistribution associated
         """
-        return self.probability_distribution_class()(flat, action_mask = action_mask)
+        return self.probability_distribution_class()(flat, action_mask=action_mask)
 
     def proba_distribution_from_latent(self, pi_latent_vector, vf_latent_vector, action_mask=None, init_scale=1.0, init_bias=0.0):
         """
@@ -167,7 +167,7 @@ class CategoricalProbabilityDistributionType(ProbabilityDistributionType):
     def proba_distribution_from_latent(self, pi_latent_vector, vf_latent_vector, action_mask=None, init_scale=1.0, init_bias=0.0):
         pdparam = linear(pi_latent_vector, 'pi', self.n_cat, init_scale=init_scale, init_bias=init_bias)
         q_values = linear(vf_latent_vector, 'q', self.n_cat, init_scale=init_scale, init_bias=init_bias)
-        return self.proba_distribution_from_flat(pdparam, action_mask = action_mask), pdparam, q_values
+        return self.proba_distribution_from_flat(pdparam, action_mask=action_mask), pdparam, q_values
 
     def param_shape(self):
         return [self.n_cat]
@@ -195,12 +195,12 @@ class MultiCategoricalProbabilityDistributionType(ProbabilityDistributionType):
         return MultiCategoricalProbabilityDistribution
 
     def proba_distribution_from_flat(self, flat, action_mask=None):
-        return MultiCategoricalProbabilityDistribution(self.n_vec, flat, action_mask = action_mask)
+        return MultiCategoricalProbabilityDistribution(self.n_vec, flat, action_mask=action_mask)
 
     def proba_distribution_from_latent(self, pi_latent_vector, vf_latent_vector, action_mask=None, init_scale=1.0, init_bias=0.0):
         pdparam = linear(pi_latent_vector, 'pi', sum(self.n_vec), init_scale=init_scale, init_bias=init_bias)
         q_values = linear(vf_latent_vector, 'q', sum(self.n_vec), init_scale=init_scale, init_bias=init_bias)
-        return self.proba_distribution_from_flat(pdparam, action_mask = action_mask), pdparam, q_values
+        return self.proba_distribution_from_flat(pdparam, action_mask=action_mask), pdparam, q_values
 
     def param_shape(self):
         return [sum(self.n_vec)]

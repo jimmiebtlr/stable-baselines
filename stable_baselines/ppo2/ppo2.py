@@ -480,20 +480,30 @@ class Runner(AbstractEnvRunner):
                 if maybe_ep_info is not None:
                     ep_infos.append(maybe_ep_info)
 
-                # 將決策網絡決定的操作替換為環境認為正確的操作
+                # Sometimes the policy network chooses action 1, but the environment does not allow this action, 
+                # action 2 is executed. Therefore, we must update the correct action.
+                # In the first step, the action mask cannot be applied.
                 env_current_actions = infos[index].get('current_actions')
-                if  np.shape(env_current_actions) == np.shape(actions[index]):
+                if isinstance(self.env.action_space, gym.spaces.MultiDiscrete) and \
+                        np.shape(env_current_actions) == np.shape(actions[index]):
                     env_current_actions = np.array(env_current_actions)
                     current_actions.append(env_current_actions)
+                elif isinstance(self.env.action_space, gym.spaces.Discrete) and \
+                        type(env_current_actions) == int:
+                    current_actions.append(np.int64(env_current_actions))
                 else:
                     current_actions.append(actions[index])
-
+                    
                 # actoin mask
                 env_action_mask = infos[index].get('action_mask')
                 if isinstance(self.env.action_space, gym.spaces.MultiDiscrete) and env_action_mask is not None:
                     self.action_masks.append(np.concatenate(env_action_mask))
-                elif isinstance(self.env.action_space, gym.spaces.MultiDiscrete) and env_action_mask is None:
+                elif isinstance(self.env.action_space, gym.spaces.MultiDiscrete):
                     self.action_masks.append(np.ones(sum(self.env.action_space.nvec)))
+                elif isinstance(self.env.action_space, gym.spaces.Discrete) and env_action_mask is not None:
+                    self.action_masks.append(env_action_mask)
+                elif isinstance(self.env.action_space, gym.spaces.Discrete):
+                    self.action_masks.append(np.ones(sum(self.env.action_space.n)))
 
             current_actions = np.array(current_actions)
             mb_actions.append(current_actions)
