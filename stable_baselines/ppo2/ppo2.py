@@ -358,9 +358,10 @@ class PPO2(ActorCriticRLModel):
                             end = start + batch_size
                             mbinds = inds[start:end]
                             slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
+                            action_masks_filtered = [arr[start:end] for arr in action_masks]
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, writer=writer,
                                                                  update=timestep, cliprange_vf=cliprange_vf_now,
-                                                                 action_masks=action_masks[start:end]))
+                                                                 action_masks=action_masks_filtered))
                 else:  # recurrent version
                     update_fac = self.n_batch // self.nminibatches // self.noptepochs // self.n_steps + 1
                     assert self.n_envs % self.nminibatches == 0
@@ -377,10 +378,12 @@ class PPO2(ActorCriticRLModel):
                             mb_flat_inds = flat_indices[mb_env_inds].ravel()
                             slices = (arr[mb_flat_inds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                             mb_states = states[mb_env_inds]
+                            
+                            action_masks_filtered = [arr[start:end] for arr in action_masks]
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, update=timestep,
                                                                  writer=writer, states=mb_states,
                                                                  cliprange_vf=cliprange_vf_now,
-                                                                 action_masks=action_masks[start:end]))
+                                                                 action_masks=action_masks_filtered))
 
                 loss_vals = np.mean(mb_loss_vals, axis=0)
                 t_now = time.time()
