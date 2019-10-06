@@ -168,9 +168,9 @@ class CategoricalProbabilityDistributionType(ProbabilityDistributionType):
     def proba_distribution_from_latent(self, pi_latent_vector, vf_latent_vector, action_mask_vector=None,
                                        init_scale=1.0, init_bias=0.0):
         pdparam = apply_action_mask(linear(pi_latent_vector, 'pi', self.n_cat, init_scale=init_scale,
-                                           init_bias=init_bias), action_mask_vector, 'mask_proba_distri_pd')
+                                           init_bias=init_bias), action_mask_vector, 'proba_distri_pd')
         q_values = apply_action_mask(linear(vf_latent_vector, 'q', self.n_cat, init_scale=init_scale,
-                                            init_bias=init_bias), action_mask_vector, 'mask_proba_distri_q')
+                                            init_bias=init_bias), action_mask_vector, 'proba_distri_q')
 
         return self.proba_distribution_from_flat(pdparam), pdparam, q_values
 
@@ -329,8 +329,7 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
         # Gumbel-max trick to sample
         # a categorical distribution (see http://amid.fish/humble-gumbel)
         uniform = tf.random_uniform(tf.shape(self.logits), dtype=self.logits.dtype)
-        return tf.argmax(self.logits, axis=-1)
-        # return tf.argmax(self.logits - tf.log(-tf.log(uniform)), axis=-1)
+        return tf.argmax(self.logits - tf.log(-tf.log(uniform)), axis=-1)
 
     @classmethod
     def fromflat(cls, flat):

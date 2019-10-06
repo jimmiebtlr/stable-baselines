@@ -11,7 +11,7 @@ from stable_baselines.acer.buffer import Buffer
 from stable_baselines.common import ActorCriticRLModel, tf_util, SetVerbosity, TensorboardWriter
 from stable_baselines.common.runners import AbstractEnvRunner
 from stable_baselines.common.policies import ActorCriticPolicy, RecurrentActorCriticPolicy
-from stable_baselines.common.policies import create_dummy_action_mask
+from stable_baselines.common.policies import create_dummy_action_mask, reshape_action_mask
 
 
 def strip(var, n_envs, n_steps, flat=False):
@@ -438,6 +438,8 @@ class ACER(ActorCriticRLModel):
         num_steps = self.train_model.action_mask_ph.shape[0]
         if len(action_masks) == 0:
             action_masks = create_dummy_action_mask(self.train_model.ac_space, num_steps)
+        else:
+            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space, num_steps)
 
         if states is not None:
             td_map[self.train_model.states_ph] = states
@@ -600,7 +602,6 @@ class _Runner(AbstractEnvRunner):
 
         if len(env.observation_space.shape) > 1:
             self.raw_pixels = True
-            print(env.observation_space.shape)
             obs_height, obs_width, obs_num_channels = env.observation_space.shape
             self.batch_ob_shape = (n_env * (n_steps + 1), obs_height, obs_width, obs_num_channels)
             self.obs_dtype = np.uint8
@@ -633,7 +634,6 @@ class _Runner(AbstractEnvRunner):
         mb_obs, mb_actions, mb_mus, mb_dones, mb_rewards, mb_action_masks = [], [], [], [], [], []
         ep_infos = []
         action_mask = None
-
         for _ in range(self.n_steps):
             actions, _, states, _ = self.model.step(self.obs, self.states, self.dones, action_mask=action_mask)
             mus = self.model.proba_step(self.obs, self.states, self.dones, action_mask=action_mask)
@@ -649,9 +649,8 @@ class _Runner(AbstractEnvRunner):
             for info in infos:
                 # Did the env tell us what actions are valid?
                 if info.get('valid_actions') is not None:
-                    action_mask = np.array(info.get('valid_actions'), dtype=np.float)
+                    action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.bool), axis=0)
                     mb_action_masks.append(action_mask)
-                    action_mask = np.expand_dims(action_mask, axis=0)
                 else:
                     # otherwise, assume all actions are valid
                     action_mask = None
@@ -671,11 +670,6 @@ class _Runner(AbstractEnvRunner):
         mb_mus = np.asarray(mb_mus, dtype=np.float32).swapaxes(1, 0)
         mb_dones = np.asarray(mb_dones, dtype=np.bool).swapaxes(1, 0)
 
-        if len(mb_action_masks) != 0:
-            if isinstance(self.env.action_space, Discrete):
-                action_mask = np.array([1] * self.env.action_space.n, dtype=np.bool)
-                for i in range(0, self.n_env):
-                    mb_action_masks.insert(0, action_mask)
         mb_masks = mb_dones  # Used for statefull models like LSTM's to mask state when done
         mb_dones = mb_dones[:, 1:]  # Used for calculating returns. The dones array is now aligned with rewards
 

@@ -8,12 +8,11 @@ import tensorflow as tf
 from stable_baselines import logger
 from stable_baselines.common import explained_variance, tf_util, ActorCriticRLModel, SetVerbosity, TensorboardWriter
 from stable_baselines.common.policies import ActorCriticPolicy, RecurrentActorCriticPolicy
-from stable_baselines.common.policies import create_dummy_action_mask
+from stable_baselines.common.policies import create_dummy_action_mask, reshape_action_mask
 from stable_baselines.common.runners import AbstractEnvRunner
 from stable_baselines.a2c.utils import discount_with_dones, Scheduler, mse, \
     total_episode_reward_logger
 from stable_baselines.ppo2.ppo2 import safe_mean
-
 
 class A2C(ActorCriticRLModel):
     """
@@ -197,6 +196,8 @@ class A2C(ActorCriticRLModel):
                   self.rewards_ph: rewards, self.learning_rate_ph: cur_lr}
         if len(action_masks) == 0:
             action_masks = None
+        if action_masks is not None:
+            action_masks = reshape_action_mask(action_masks, self.train_model.ac_space, self.n_steps * self.n_envs)
         if states is not None:
             td_map[self.train_model.states_ph] = states
             td_map[self.train_model.dones_ph] = masks
@@ -332,7 +333,7 @@ class A2CRunner(AbstractEnvRunner):
         ep_infos = []
         action_mask = None
         for _ in range(self.n_steps):
-            actions, values, states, _ = self.model.step(self.obs, self.states, self.dones, action_mask=self.action_mask)
+            actions, values, states, _ = self.model.step(self.obs, self.states, self.dones, action_mask=action_mask)
             mb_obs.append(np.copy(self.obs))
             mb_actions.append(actions)
             mb_values.append(values)
@@ -347,9 +348,10 @@ class A2CRunner(AbstractEnvRunner):
                 if maybe_ep_info is not None:
                     ep_infos.append(maybe_ep_info)
                 if info.get('valid_actions') is not None:
-                    self.action_mask = np.array(info.get('valid_actions'), dtype=np.float)
-                    mb_action_masks.append(self.action_mask)
-                    self.action_mask = np.expand_dims(self.action_mask, axis=0)
+                    action_mask = np.expand_dims(np.array(info.get('valid_actions'), dtype=np.float),
+                                                            axis=0)
+                    mb_action_masks.append(np.copy(action_mask))
+
             self.states = states
             self.dones = dones
             self.obs = obs
