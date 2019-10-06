@@ -490,18 +490,20 @@ class Runner(AbstractEnvRunner):
             if isinstance(self.env.action_space, gym.spaces.Box):
                 clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
             self.obs[:], rewards, self.dones, infos = self.env.step(clipped_actions)
+
+            action_mask = []
             for info in infos:
                 if info.get('episode') is not None:
                     ep_infos.append(info.get('episode'))
                 # Did the env tell us what actions are valid?
                 if info.get('valid_actions') is not None:
-                    action_mask = np.array(info.get('valid_actions'), dtype=np.float)
-                    mb_action_masks.append(action_mask)
+                    action_mask.append(np.array(info.get('valid_actions'), dtype=np.float))
                     action_mask = np.expand_dims(action_mask, axis=0)
                 else:
                     # otherwise, assume all actions are valid
                     self.model.action_mask = None
 
+            mb_action_masks.append(np.asarray(action_mask))
             mb_rewards.append(rewards)
         # batch of steps to batch of rollouts
         mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
