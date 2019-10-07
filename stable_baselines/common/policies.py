@@ -123,11 +123,14 @@ class BasePolicy(ABC):
                 self._action_ph = tf.placeholder(dtype=ac_space.dtype, shape=(n_batch,) + ac_space.shape,
                                                  name="action_ph")
             if isinstance(ac_space, MultiDiscrete):
-                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_env, sum(ac_space.nvec)), name="action_mask_ph")
+                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, sum(ac_space.nvec)), name="action_mask_ph")
+                self._action_mask_shape = (n_env, sum(ac_space.nvec))
             elif isinstance(ac_space, Discrete) or isinstance(ac_space, MultiBinary):
-                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_env, ac_space.n), name="action_mask_ph")
+                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, ac_space.n), name="action_mask_ph")
+                self._action_mask_shape = (n_env, ac_space.n)
             elif isinstance(ac_space, Box):
-                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_env, ac_space.shape[0]), name="action_mask_ph")
+                self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(n_batch, ac_space.shape[0]), name="action_mask_ph")
+                self._action_mask_shape = (n_batch, ac_space.shape[0])
 
         self.sess = sess
         self.reuse = reuse
@@ -168,8 +171,13 @@ class BasePolicy(ABC):
 
     @property
     def action_mask_ph(self):
-        """tf.Tensor: placeholder for valid actions, shape (self.n_env, self.ac_space.n)"""
+        """tf.Tensor: placeholder for valid actions, shape (self.n_batch, self.ac_space.n)"""
         return self._action_mask_ph
+
+    @property
+    def action_mask_shape(self):
+        """action mask shape: placeholder for valid actions, shape (self.n_env, self.ac_space.n)"""
+        return self._action_mask_ph   
 
     @staticmethod
     def _kwargs_check(feature_extraction, kwargs):
@@ -214,12 +222,12 @@ class BasePolicy(ABC):
         raise NotImplementedError
 
     def action_mask_check(self, action_mask):
-        if np.shape(self.action_mask_ph) == np.shape(action_mask):
+        if np.shape(self.action_mask_shape) == np.shape(action_mask):
             action_mask = np.array(action_mask, dtype=np.float32)
             action_mask[action_mask <= 0] = -np.inf
             action_mask[action_mask > 0] = 0
         else:
-            action_mask = np.zeros(np.shape(self.action_mask_ph))
+            action_mask = np.zeros(np.shape(self.action_mask_shape))
 
         return action_mask
 
