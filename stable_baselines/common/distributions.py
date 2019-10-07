@@ -85,7 +85,7 @@ class ProbabilityDistributionType(object):
         """
         raise NotImplementedError
 
-    def proba_distribution_from_flat(self, flat, action_mask=None):
+    def proba_distribution_from_flat(self, flat):
         """
         Returns the probability distribution from flat probabilities
         flat: flattened vector of parameters of probability distribution
@@ -93,9 +93,9 @@ class ProbabilityDistributionType(object):
         :param flat: ([float]) the flat probabilities
         :return: (ProbabilityDistribution) the instance of the ProbabilityDistribution associated
         """
-        return self.probability_distribution_class()(flat, action_mask=action_mask)
+        return self.probability_distribution_class()(flat)
 
-    def proba_distribution_from_latent(self, pi_latent_vector, vf_latent_vector, action_mask=None, init_scale=1.0, init_bias=0.0):
+    def proba_distribution_from_latent(self, pi_latent_vector, vf_latent_vector, init_scale=1.0, init_bias=0.0):
         """
         returns the probability distribution from latent values
 
@@ -163,6 +163,9 @@ class CategoricalProbabilityDistributionType(ProbabilityDistributionType):
 
     def probability_distribution_class(self):
         return CategoricalProbabilityDistribution
+
+    def proba_distribution_from_flat(self, flat, action_mask=None):
+        return CategoricalProbabilityDistribution(self.n_vec, flat, action_mask=action_mask)
 
     def proba_distribution_from_latent(self, pi_latent_vector, vf_latent_vector, action_mask=None, init_scale=1.0, init_bias=0.0):
         pdparam = linear(pi_latent_vector, 'pi', self.n_cat, init_scale=init_scale, init_bias=init_bias)
